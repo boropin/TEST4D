@@ -1,0 +1,250 @@
+<head>
+    <title>IAQ MAP4D</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.min.js"></script>
+    <script src=""></script>
+    <script>
+        // (c) Katsuhiko Araki 2023/12/13
+
+// センサの位置と測定値を示すリスト（位置と高さを含む、CSV等、自動で取得予定）
+const sensor_data = [
+    { position: [0.5, 0.5, 1.5], temperature: 10 },
+    { position: [0.5, 15, 1.5], temperature: 23 },
+    { position: [0.5, 0.5, 8], temperature: 22 },
+    { position: [0.5, 15, 8], temperature: 20 },
+    { position: [14, 0.5, 1.5], temperature: 20 },
+    { position: [14, 15, 1.5], temperature: 20 },
+    { position: [14, 0.5, 8], temperature: 30 },
+    { position: [14, 15, 8], temperature: 35 },
+    { position: [27.5, 0.5, 1.5], temperature: 25 },
+    { position: [27.5, 15, 1.5], temperature: 25 },
+    { position: [27.5, 0.5, 8], temperature: 28 },
+    { position: [27.5, 15, 8], temperature: 35 },
+    { position: [27.5, 7, 8], temperature: 40 }
+];
+
+// krigingによりセンサデータを元に範囲内格子点上の値を作成
+function kriging(grid_points, sensor_data) {
+    const eps = 1e-5; // A small number　※逆行列の正則化用
+    const n = sensor_data.length;　//　センサデータ数
+    const m = grid_points.length;  //　グリッドの数
+    const C = new Array(n).fill(0).map(() => new Array(n).fill(0));
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+            const dist = Math.sqrt(
+                Math.pow(sensor_data[i].position[0] - sensor_data[j].position[0], 2) +
+                Math.pow(sensor_data[i].position[1] - sensor_data[j].position[1], 2) +
+                Math.pow(sensor_data[i].position[2] - sensor_data[j].position[2], 2)
+            );
+            C[i][j] = Math.pow(sensor_data[i].temperature, 2) * Math.exp(-dist / 10);
+        }
+    }
+    const estimates = [];
+    for (let i = 0; i < m; i++) {
+        const k = new Array(n).fill(0);
+        for (let j = 0; j < n; j++) {
+            const dist = Math.sqrt(
+                Math.pow(sensor_data[j].position[0] - grid_points[i][0], 2) +
+                Math.pow(sensor_data[j].position[1] - grid_points[i][1], 2) +
+                Math.pow(sensor_data[j].position[2] - grid_points[i][2], 2)
+            );
+            k[j] = Math.pow(sensor_data[j].temperature, 2) * Math.exp(-dist / 10);
+        }
+        const C_modified = C.map(arr => arr.slice());
+        for (let j = 0; j < C.length; j++) {
+            C_modified[j][j] += eps; // ここで正則化しないとエラーが出る
+        }
+        //numeric.solve : C^(-1)k ※C^(-1) はCの逆行列
+        //参考：https://www.natural-science.or.jp/article/20131102210939.php
+        const weights = numeric.solve(C_modified, k);
+        let estimate = 0;
+        for (let j = 0; j < n; j++) {
+            estimate += weights[j] * sensor_data[j].temperature;
+        }
+        estimates.push(estimate);
+    }
+    return estimates;
+}
+
+// 格子点の位置を生成
+function generate_grid_points(FX, FY, FZ) {
+    const grid_points = [];
+    for (let x = 0; x <= FX; x++) {  // X軸　1m毎
+        for (let y = 0; y <= FY; y++) {  // Y軸　1m毎
+            for (let z = 0; z <= FZ; z++) { // Z軸　1m毎
+                grid_points.push([x, y, z]);
+            }
+        }
+    }
+    return grid_points;
+}
+
+// いわゆるメイン関数
+        
+function LoadProc(){
+    let threshold = 0; // 閾値(初期)
+    plotmap(threshold);
+}
+
+function plotmap(threshold){
+    const FX = 28, FY = 15, FZ = 10;  // 実際のエリアx,y,z[m]
+    const width = 1200, height = 800; // 描画の大きさ
+    let camera = {eye: { x: 0, y: -FY*2, z: FZ*2 }};
+    const grid_points = generate_grid_points(FX, FY, FZ);
+    const kriging_estimates = kriging(grid_points, sensor_data);
+
+	//data output test
+    //console.log(kriging_estimates);    
+
+    // xx℃以上の格子点のインデックスを取得
+    threshold--; // 表示調整   
+    const hot_indices = [];
+    for (let i = 0; i < kriging_estimates.length; i++) {
+        if (kriging_estimates[i] >= threshold) {
+            hot_indices.push(i);
+        }
+    }
+
+    // 格子点の座標を取得
+    const x_vals = hot_indices.map(i => grid_points[i][0]);
+    const y_vals = hot_indices.map(i => grid_points[i][1]);
+    const z_vals = hot_indices.map(i => grid_points[i][2]);
+
+    // 格子点の温度を取得
+    const temperatures = hot_indices.map(i => kriging_estimates[i]);
+
+    // センサーの位置と近くの測定温度を取得
+    const sensor_x = sensor_data.map(sensor => sensor.position[0]);
+    const sensor_y = sensor_data.map(sensor => sensor.position[1]);
+    const sensor_z = sensor_data.map(sensor => sensor.position[2]);
+    const sensor_temps = sensor_data.map(sensor => sensor.temperature);
+
+    // 3Dプロットを作成
+    const trace1 = {
+        x: x_vals,
+        y: y_vals,
+        z: z_vals,
+        mode: 'markers',
+        marker: {
+            size: 7,
+            color: temperatures,
+            colorscale: 'Jet',  // カラーバーをJetに設定
+            cmin: 0,  // カラーバーの最小値
+            cmax: 40,  // カラーバーの最大値
+            opacity: 0.1
+        },
+        text: temperatures,
+        hoverinfo: 'text',
+        type: 'scatter3d'
+    };
+
+    const trace2 = {
+        x: sensor_x,
+        y: sensor_y,
+        z: sensor_z,
+        mode: 'markers+text',
+        marker: {
+            size: 5,
+            color: sensor_temps,
+            colorscale: 'Jet',
+            cmin: 0,
+            cmax: 40,
+            opacity: 1,
+            symbol: 'x',  // センサーのマーカーシンボルをXに設定
+            showscale: true,
+            colorbar: {
+                title: "Value",
+                thicknessmode: "pixels",
+                thickness: 30,
+                lenmode: "pixels",
+                len: 300
+            }
+        },
+        text: sensor_temps,
+        hoverinfo: 'text',
+        type: 'scatter3d'
+    };
+
+    const data = [trace1, trace2];
+
+
+    // レイアウトを設定
+    const layout = {
+        width: width,
+        height: height,
+        scene: {
+            xaxis: { title: 'X', range: [0, FX], backgroundcolor: 'white', gridcolor: 'gray', gridwidth: 1, linecolor: 'black' },
+            yaxis: { title: 'Y', range: [0, FY], backgroundcolor: 'white', gridcolor: 'gray', gridwidth: 1, linecolor: 'black' },
+            zaxis: { title: 'Z', range: [0, FZ], backgroundcolor: 'white', gridcolor: 'gray', gridwidth: 1, linecolor: 'black' },
+            aspectratio: { x: FX, y: FY, z: FZ },
+            camera: camera,//カメラ位置
+        },
+        margin: { l: 20, r: 20, b: 20, t: 20 },
+        paper_bgcolor: "#FFF",
+    };
+ 
+
+    // 3Dプロットを表示
+    Plotly.newPlot('graph', data, layout);
+}
+
+
+    
+    </script>
+    <style type="text/css">
+    IAQ heatmap
+    </style>
+</head>
+<body onload="LoadProc();">
+    <table border="0" align=center style="font-size: 8pt;">
+        <tr>
+            <td valign = baseline>
+                <span style = "font-family: fantasy;color:Black;background:#FFF;border: 1px solid #FFF;padding:5px;font-size: 18pt;">IAQ MAP4D</span>
+                <div id="DateTimeDisp" align=center style = "background:white;font-family: fantasy;font-size: 12pt;">0000/00/00 00:00:00 </div>
+            </td>
+            <td valign = baseline>
+                <a id="tmp" href="" style="background:lightgray;">----</a>
+            </td>
+            <td valign = baseline>
+                <a id="hum" href="" style="background:lightgray;">----</a>
+            </td>
+            <td valign = baseline>
+                <a id="co2" href="" style="background:lightgray;">----</a>
+            </td>
+            <td valign = baseline>
+                <a id="wbgt" href="" style="background:lightgray;">----</a>
+            </td>
+            <td valign = baseline>
+                <a id="pm25" href="" style="background:lightgray;">----</a>
+            </td>
+            <td valign = baseline>
+                <a id="voc" href="" style="background:lightgray;">----</a>
+            </td>
+            <td valign = baseline>
+                <a id="press" href="" style="background:lightgray;">----</a>
+            </td>
+            <td valign = baseline>
+                <a id="uv" href="" style="background:lightgray;">----</a>
+            </td>
+        </tr>
+    </table>
+    <P>
+    <table border="0" align=center style="font-size: 8pt;">
+        <tr align=center style = "font-family: fantasy;color:Black;background:#FFF;border: 1px solid #FFF;padding:5px;font-size: 18pt;">
+            <td>Threshold value: </td>
+            <td><input type='range' name='range1' min="0" max="40" step="1" value="0"></td>
+            <td><span id="threshold"  style = "font-family: fantasy;color:Black;background:#FFF;border: 1px solid #FFF;padding:5px;font-size: 18pt;">0</span></td>
+        </tr>
+    </table>
+<script>
+    let range1 = document.querySelector("input[type='range'][name='range1']");
+    range1.addEventListener("change", (event) => {
+        document.querySelector("#threshold").innerHTML = range1.value;
+        plotmap(range1.value);
+    });
+</script>
+
+<div id="graph" align=center></div>
+</body>
+
