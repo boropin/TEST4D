@@ -291,18 +291,26 @@ function plotmap(threshold){
         x: x_vals,
         y: y_vals,
         z: z_vals,
-        mode: 'markers',
-        marker: {
-            size: 10,
-            color: temperatures,
-            colorscale: 'Jet',  // カラーバーをJetに設定
-            cmin: 0,  // カラーバーの最小値
-            cmax: 40,  // カラーバーの最大値
-            opacity: 0.1
+        value:temperatures,
+        isomin: 0,
+        isomax: 40,
+        vmin:0,
+        vmax:40,
+        colorscale: "Jet",
+        opacity: 0.3,
+        surface: {show: true, count:11, fill: 1.0},
+        colorbar: {
+            title: "Value",
+            thicknessmode: "pixels",
+            thickness: 30,
+            lenmode: "pixels",
+            len: 400,
         },
         text: temperatures,
         hoverinfo: 'text',
-        type: 'scatter3d'
+        //type: 'scatter3d',
+        type: 'isosurface',
+
     };
     
     const trace2 = {
@@ -324,7 +332,7 @@ function plotmap(threshold){
                 thicknessmode: "pixels",
                 thickness: 30,
                 lenmode: "pixels",
-                len: 300
+                len: 400
             }
         },
         text: sensor_temps,
@@ -342,7 +350,7 @@ function plotmap(threshold){
         i: ci,
         j: cj,
         k: ck,
-        color: 'lightblue',
+        color: 'lightgray',
         hoverinfo:'skip',
         type: 'mesh3d',
     };
@@ -380,9 +388,6 @@ function plotmap(threshold){
     });
 
 }
-        
-    
-
 
     </script>
     <style type="text/css">
@@ -423,20 +428,5 @@ function plotmap(threshold){
         </tr>
     </table>
     <P>
-    <table border="0" align=center style="font-size: 8pt;">
-        <tr align=center style = "font-family: fantasy;color:Black;background:#FFF;border: 1px solid #FFF;padding:5px;font-size: 18pt;">
-            <td>Threshold value: </td>
-            <td><input type='range' name='range1' min="-20" max="60" step="0.5" value="0"></td>
-            <td><span id="threshold"  style = "font-family: fantasy;color:Black;background:#FFF;border: 1px solid #FFF;padding:5px;font-size: 18pt;">0</span></td>
-        </tr>
-    </table>
-<script>
-    let range1 = document.querySelector("input[type='range'][name='range1']");
-    range1.addEventListener("change", (event) => {
-        document.querySelector("#threshold").innerHTML = range1.value;
-        plotmap(range1.value);
-    });
-</script>
-
-<div id="graph" align=center></div>
+    <div id="graph" align=center></div>
 </body>
