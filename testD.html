@@ -24,6 +24,17 @@ const sensor_data = [
     { position: [27.5, 7, 8], temperature: 40 }
 ];
 
+const FX = 28, FY = 15, FZ = 10;  // 実際のエリアx,y,z[m]
+const width = 1200, height = 800; // 描画の大きさ
+    
+var camera = {
+    eye: { x:0 , y: -FY*2, z: FZ*2 },
+    center:{ x:0 , y: 0, z: 0 },
+    projection: {type: 'perspective'},
+    up:{ x:0 , y: 0, z: 1 },
+};
+
+
 cx=[-0.41000003,-0.41000003,-0.41000003,-0.41000003,-0.38000003,
 -0.38000003,-0.38000003,-0.38000003,-0.38000003,-0.38000003,
 -0.38000003,-0.37,-0.37,-0.37,-0.37,
@@ -222,6 +233,8 @@ function kriging(grid_points, sensor_data) {
     return estimates;
 }
 
+
+
 // 格子点の位置を生成
 function generate_grid_points(FX, FY, FZ) {
     const grid_points = [];
@@ -243,9 +256,7 @@ function LoadProc(){
 }
 
 function plotmap(threshold){
-    const FX = 28, FY = 15, FZ = 10;  // 実際のエリアx,y,z[m]
-    const width = 1200, height = 800; // 描画の大きさ
-    let camera = {eye: { x:0 , y: -FY*2, z: FZ*2 }};
+
     const grid_points = generate_grid_points(FX, FY, FZ);
     const kriging_estimates = kriging(grid_points, sensor_data);
 
@@ -282,7 +293,7 @@ function plotmap(threshold){
         z: z_vals,
         mode: 'markers',
         marker: {
-            size: 7,
+            size: 10,
             color: temperatures,
             colorscale: 'Jet',  // カラーバーをJetに設定
             cmin: 0,  // カラーバーの最小値
@@ -293,7 +304,7 @@ function plotmap(threshold){
         hoverinfo: 'text',
         type: 'scatter3d'
     };
-
+    
     const trace2 = {
         x: sensor_x,
         y: sensor_y,
@@ -335,7 +346,8 @@ function plotmap(threshold){
         hoverinfo:'skip',
         type: 'mesh3d',
     };
-    
+
+
     const data = [trace1, trace2, trace3];
 
 
@@ -355,7 +367,22 @@ function plotmap(threshold){
     };
     // 3Dプロットを表示
     Plotly.newPlot('graph', data, layout);
+
+    graph.on('plotly_relayout', function(eventdata){
+        var s = eventdata['scene.camera'];
+        //console.log(s);
+        camera = {
+            eye: s.eye,
+            center:s.center,
+            projection: s.projection,
+            up:s.up,
+        }
+    });
+
 }
+        
+    
+
 
     </script>
     <style type="text/css">
@@ -399,7 +426,7 @@ function plotmap(threshold){
     <table border="0" align=center style="font-size: 8pt;">
         <tr align=center style = "font-family: fantasy;color:Black;background:#FFF;border: 1px solid #FFF;padding:5px;font-size: 18pt;">
             <td>Threshold value: </td>
-            <td><input type='range' name='range1' min="0" max="40" step="1" value="0"></td>
+            <td><input type='range' name='range1' min="-20" max="60" step="0.5" value="0"></td>
             <td><span id="threshold"  style = "font-family: fantasy;color:Black;background:#FFF;border: 1px solid #FFF;padding:5px;font-size: 18pt;">0</span></td>
         </tr>
     </table>
